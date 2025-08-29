@@ -14,6 +14,16 @@ set (CMAKE_CXX_STANDARD 11)
 
 set (RENDERER_FLAGS "")
 
+# Windows-specific configuration
+if(WIN32)
+    # Add Windows-specific definitions
+    add_definitions(-DWIN32_LEAN_AND_MEAN)
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+    
+    # Link against Windows libraries
+    set(WINDOWS_LIBS ws2_32 iphlpapi)
+endif()
+
 add_subdirectory(lib/playfair)
 add_subdirectory(lib/llhttp)
 add_subdirectory(lib)
@@ -23,6 +33,11 @@ add_subdirectory(renderers)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RENDERER_FLAGS}" )
 
 add_executable( rpiplay rpiplay.cpp)
-target_link_libraries ( rpiplay renderers airplay )
+
+if(WIN32)
+    target_link_libraries ( rpiplay renderers airplay ${WINDOWS_LIBS} )
+else()
+    target_link_libraries ( rpiplay renderers airplay )
+endif()
 
 install(TARGETS rpiplay RUNTIME DESTINATION bin)

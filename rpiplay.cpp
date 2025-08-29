@@ -25,6 +25,7 @@
 #include <vector>
 #include <fstream>
 
+#ifndef _WIN32
 #include <sys/socket.h>
 #include <ifaddrs.h>
 #ifdef __linux__
@@ -32,12 +33,17 @@
 #else
 #include <net/if_dl.h>   /* macOS and *BSD */
 #endif
+#else
+#include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
+#endif
 
 #include "log.h"
 #include "lib/raop.h"
 #include "lib/stream.h"
 #include "lib/logger.h"
 #include "lib/dnssd.h"
+#include "lib/netutils.h"
 #include "renderers/video_renderer.h"
 #include "renderers/audio_renderer.h"
 
@@ -133,8 +139,62 @@ static int parse_hw_addr(std::string str, std::vector<char> &hw_addr) {
 
 static std::string find_mac () {
 /*  finds the MAC address of the first active network interface *
- *  in a Linux, *BSD or macOS system.                           */
+ *  in a Linux, *BSD, macOS or Windows system.                  */
     std::string mac_address = "";
+    
+#ifdef _WIN32
+    // Windows implementation using GetAdaptersAddresses
+    DWORD dwSize = 0;
+    DWORD dwRetVal = 0;
+    PIP_ADAPTER_ADDRESSES pAddresses = NULL;
+    
+    // Get the size needed
+    GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, NULL, &dwSize);
+    
+    pAddresses = (IP_ADAPTER_ADDRESSES *) malloc(dwSize);
+    if (pAddresses == NULL) {
+        return mac_address;
+    }
+    
+    dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, pAddresses, &dwSize);
+    
+    if (dwRetVal == NO_ERROR) {
+        PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses;
+        while (pCurrAddresses) {
+            if (pCurrAddresses->OperStatus == IfOperStatusUp && 
+                pCurrAddresses->PhysicalAddressLength == 6) {
+                
+                // Check if it's not all zeros
+                int non_null_octets = 0;
+                for (int i = 0; i < 6; i++) {
+                    if (pCurrAddresses->PhysicalAddress[i] != 0) {
+                        non_null_octets++;
+                    }
+                }
+                
+                if (non_null_octets > 0) {
+                    char str[3];
+                    for (int i = 0; i < 6; i++) {
+#ifdef _WIN32
+                        sprintf_s(str, sizeof(str), "%02x", pCurrAddresses->PhysicalAddress[i]);
+#else
+                        sprintf(str, "%02x", pCurrAddresses->PhysicalAddress[i]);
+#endif
+                        mac_address += str;
+                        if (i < 5) mac_address += ":";
+                    }
+                    break;
+                }
+            }
+            pCurrAddresses = pCurrAddresses->Next;
+        }
+    }
+    
+    if (pAddresses) {
+        free(pAddresses);
+    }
+#else
+    // Unix implementation (Linux, macOS, BSD)
     struct ifaddrs *ifap, *ifaptr;
     int non_null_octets = 0;
     unsigned char octet[6], *ptr;
@@ -159,7 +219,11 @@ static std::string find_mac () {
                 mac_address.erase();
                 char str[3];
                 for (int i = 0; i < 6 ; i++) {
+#ifdef _WIN32
+                    sprintf_s(str, sizeof(str), "%02x", octet[i]);
+#else
                     sprintf(str,"%02x", octet[i]);
+#endif
                     mac_address = mac_address + str;
                     if (i < 5) mac_address = mac_address + ":";
                 }
@@ -168,6 +232,7 @@ static std::string find_mac () {
         }
     }
     freeifaddrs(ifap);
+#endif
     return mac_address;
 }
 
@@ -212,6 +277,12 @@ void print_info(char *name) {
 }
 
 int main(int argc, char *argv[]) {
+    // Initialize network subsystem (required on Windows)
+    if (netutils_init() != 0) {
+        fprintf(stderr, "Error: Failed to initialize network subsystem\n");
+        return 1;
+    }
+    
     init_signals();
     
     std::string server_name = DEFAULT_NAME;
@@ -307,11 +378,20 @@ int main(int argc, char *argv[]) {
 
     running = true;
     while (running) {
-        sleep(1);
+#ifdef _WIN32
+        Sleep(1000);  // Windows Sleep uses milliseconds
+#else
+        sleep(1);     // Unix sleep uses seconds
+#endif
     }
 
     LOGI("Stopping...");
     stop_server();
+    
+    // Cleanup network subsystem
+    netutils_cleanup();
+    
+    return 0;
 }
 
 // Server callbacks

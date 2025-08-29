@@ -5,9 +5,18 @@ if( UNIX AND NOT APPLE )
     set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSTANDALONE -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS -DTARGET_POSIX -D_LINUX -fPIC -DPIC -D_REENTRANT   -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -U_FORTIFY_SOURCE -Wall -g" )
 endif()
 
+# Windows-specific flags
+if( WIN32 )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWIN32_LEAN_AND_MEAN -D_CRT_SECURE_NO_WARNINGS" )
+endif()
+
 # Common x86/x86_64 cflags
 if( CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)" )
-    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Ofast -march=native" )
+    if( WIN32 )
+        set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2" )  # Use O2 instead of Ofast on Windows
+    else()
+        set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Ofast -march=native" )
+    endif()
 endif()
 
 # Always compile the dummy renderers
