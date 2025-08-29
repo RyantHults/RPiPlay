@@ -57,27 +57,71 @@ if( BRCM_GLES_V2 AND BRCM_EGL AND OPENMAXIL AND BCM_HOST AND VCOS AND VCHIQ_ARM 
   set( RENDERER_FLAGS "${RENDERER_FLAGS} -DHAS_RPI_RENDERER" )
   set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_rpi.c video_renderer_rpi.c )
   set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ilclient airplay fdk-aac h264-bitstream )
+elseif( WIN32 )
+  # Windows: Build FDK-AAC and h264-bitstream but not RPI-specific code
+  message( STATUS "Building for Windows - including FDK-AAC support" )
+  option(BUILD_SHARED_LIBS "" OFF)
+  add_subdirectory(fdk-aac EXCLUDE_FROM_ALL)
+  add_subdirectory( h264-bitstream )
+  set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} fdk-aac h264-bitstream )
 else()
   message( STATUS "OpenMAX libraries not found, skipping compilation of Raspberry Pi renderer" )
 endif()
 
 # Check for availability of gstreamer
-find_package( PkgConfig )
-if( PKG_CONFIG_FOUND )
-  pkg_check_modules( GST gstreamer-1.0>=1.4
-                         gstreamer-sdp-1.0>=1.4
-                         gstreamer-video-1.0>=1.4
-                         gstreamer-app-1.0>=1.4 )
-  if( GST_FOUND )
-    set( RENDERER_FLAGS "${RENDERER_FLAGS} -DHAS_GSTREAMER_RENDERER" )
-    set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_gstreamer.c video_renderer_gstreamer.c )
-    set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ${GST_LIBRARIES} )
-    set( RENDERER_INCLUDE_DIRS ${RENDERER_INCLUDE_DIRS} ${GST_INCLUDE_DIRS} )
-  else()
-    message( STATUS "GStreamer not found, skipping compilation of GStreamer renderer" )
-  endif()
+if( WIN32 )
+    # Windows: Try to find GStreamer using standard CMake methods first
+    find_package(PkgConfig QUIET)
+    if( PKG_CONFIG_FOUND )
+        pkg_check_modules( GST gstreamer-1.0>=1.4
+                             gstreamer-sdp-1.0>=1.4
+                             gstreamer-video-1.0>=1.4
+                             gstreamer-app-1.0>=1.4 )
+    endif()
+    
+    # If pkg-config fails, try environment variables (common GStreamer Windows install)
+    if( NOT GST_FOUND AND DEFINED ENV{GSTREAMER_1_0_ROOT_MSVC_X86_64} )
+        set( GSTREAMER_ROOT $ENV{GSTREAMER_1_0_ROOT_MSVC_X86_64} )
+        message( STATUS "Using GStreamer from environment: ${GSTREAMER_ROOT}" )
+        
+        set( GST_INCLUDE_DIRS "${GSTREAMER_ROOT}/include/gstreamer-1.0" 
+                              "${GSTREAMER_ROOT}/include/glib-2.0"
+                              "${GSTREAMER_ROOT}/lib/glib-2.0/include" )
+        set( GST_LIBRARIES "${GSTREAMER_ROOT}/lib/gstreamer-1.0.lib"
+                           "${GSTREAMER_ROOT}/lib/gstapp-1.0.lib"
+                           "${GSTREAMER_ROOT}/lib/gobject-2.0.lib"
+                           "${GSTREAMER_ROOT}/lib/glib-2.0.lib" )
+        set( GST_FOUND TRUE )
+    endif()
+    
+    if( GST_FOUND )
+        set( RENDERER_FLAGS "${RENDERER_FLAGS} -DHAS_GSTREAMER_RENDERER" )
+        set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_gstreamer.c video_renderer_gstreamer.c )
+        set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ${GST_LIBRARIES} )
+        set( RENDERER_INCLUDE_DIRS ${RENDERER_INCLUDE_DIRS} ${GST_INCLUDE_DIRS} )
+        message( STATUS "GStreamer found for Windows" )
+    else()
+        message( STATUS "GStreamer not found on Windows. Install GStreamer development packages or set GSTREAMER_1_0_ROOT_MSVC_X86_64 environment variable." )
+    endif()
 else()
-  message( STATUS "pkg-config not found, skipping compilation of GStreamer renderer" )
+    # Unix/Linux: Use pkg-config
+    find_package( PkgConfig )
+    if( PKG_CONFIG_FOUND )
+      pkg_check_modules( GST gstreamer-1.0>=1.4
+                             gstreamer-sdp-1.0>=1.4
+                             gstreamer-video-1.0>=1.4
+                             gstreamer-app-1.0>=1.4 )
+      if( GST_FOUND )
+        set( RENDERER_FLAGS "${RENDERER_FLAGS} -DHAS_GSTREAMER_RENDERER" )
+        set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_gstreamer.c video_renderer_gstreamer.c )
+        set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ${GST_LIBRARIES} )
+        set( RENDERER_INCLUDE_DIRS ${RENDERER_INCLUDE_DIRS} ${GST_INCLUDE_DIRS} )
+      else()
+        message( STATUS "GStreamer not found, skipping compilation of GStreamer renderer" )
+      endif()
+    else()
+      message( STATUS "pkg-config not found, skipping compilation of GStreamer renderer" )
+    endif()
 endif()
 
 # Create the renderers library and link against everything
