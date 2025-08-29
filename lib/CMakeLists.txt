@@ -13,10 +13,18 @@ find_library( LIBPLIST NAMES plist plist-2.0 )
 
 if( WIN32 )
     # Windows configuration
-    target_link_libraries( airplay
-        playfair
-        llhttp
-        ${LIBPLIST} )
+    if( LIBPLIST )
+        target_link_libraries( airplay
+            playfair
+            llhttp
+            ${LIBPLIST} )
+        message(STATUS "Found libplist: ${LIBPLIST}")
+    else()
+        target_link_libraries( airplay
+            playfair
+            llhttp )
+        message(WARNING "libplist not found. Some functionality may be limited.")
+    endif()
     
     # Try to find OpenSSL
     find_package(OpenSSL)
@@ -27,11 +35,19 @@ if( WIN32 )
     endif()
     
 elseif( UNIX AND NOT APPLE )
-    target_link_libraries( airplay
-        pthread
-        playfair
-        llhttp
-        ${LIBPLIST} )
+    if( LIBPLIST )
+        target_link_libraries( airplay
+            pthread
+            playfair
+            llhttp
+            ${LIBPLIST} )
+    else()
+        target_link_libraries( airplay
+            pthread
+            playfair
+            llhttp )
+        message(WARNING "libplist not found. Some functionality may be limited.")
+    endif()
     
     find_package(OpenSSL 1.1.1 REQUIRED)
     target_compile_definitions(airplay PUBLIC OPENSSL_API_COMPAT=0x10101000L)
@@ -39,11 +55,19 @@ elseif( UNIX AND NOT APPLE )
     target_link_libraries( airplay dns_sd )
 else()
     # macOS configuration
-    target_link_libraries( airplay
-        pthread
-        playfair
-        llhttp
-        ${LIBPLIST} )
+    if( LIBPLIST )
+        target_link_libraries( airplay
+            pthread
+            playfair
+            llhttp
+            ${LIBPLIST} )
+    else()
+        target_link_libraries( airplay
+            pthread
+            playfair
+            llhttp )
+        message(WARNING "libplist not found. Some functionality may be limited.")
+    endif()
         
     include_directories( /usr/local/opt/openssl@1.1/include/ )
     target_link_libraries( airplay /usr/local/opt/openssl@1.1/lib/libcrypto.a )

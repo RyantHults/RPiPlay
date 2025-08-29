@@ -7,6 +7,7 @@
 3. **Bonjour SDK for Windows** (for DNS-SD support)
 4. **OpenSSL for Windows** (for encryption)
 5. **GStreamer** (optional, for hardware-accelerated rendering)
+6. **libplist** (optional, for some Apple device compatibility features)
 
 ## Dependencies Installation
 
@@ -22,6 +23,11 @@
 - Download from: https://gstreamer.freedesktop.org/download/
 - Install the MSVC x86_64 runtime and development packages
 - Add GStreamer bin directory to PATH
+
+### 4. libplist (Optional)
+- Use vcpkg: `vcpkg install libplist:x64-windows`
+- Or compile from source: https://github.com/libimobiledevice/libplist
+- Not strictly required, but may improve compatibility with some Apple devices
 
 ## Building
 
